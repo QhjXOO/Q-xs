@@ -1,0 +1,33 @@
+---
+/**
+ * reports/[...slug].astro — Report detail page (static generation)
+ */
+import PostLayout from '../../layouts/PostLayout.astro';
+import { getCollection, render } from 'astro:content';
+import type { InferGetStaticPropsType } from 'astro';
+
+export const prerender = true;
+
+export async function getStaticPaths() {
+  const reports = await getCollection('reports', ({ data }) => !data.draft);
+  return reports.map((report) => ({
+    params: { slug: report.id },
+    props: { report },
+  }));
+}
+
+type Props = InferGetStaticPropsType<typeof getStaticPaths>;
+const { report } = Astro.props;
+const { Content } = await render(report);
+---
+
+<PostLayout
+  title={report.data.title}
+  description={report.data.summary}
+  date={report.data.date}
+  author={report.data.author}
+  category={report.data.category}
+  type="report"
+>
+  <Content />
+</PostLayout>

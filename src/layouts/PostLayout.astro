@@ -1,0 +1,93 @@
+---
+/**
+ * PostLayout.astro — Layout for blog posts and research reports
+ */
+import BaseLayout from './BaseLayout.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+  date: Date;
+  author?: string;
+  category?: string;
+  tags?: string[];
+  type?: 'blog' | 'report';
+}
+
+const { title, description, date, author, category, tags = [], type = 'blog' } = Astro.props;
+const formattedDate = date.toLocaleDateString('en-US', {
+  year: 'numeric', month: 'long', day: 'numeric',
+});
+---
+
+<BaseLayout title={`${title} — Q:XS`} description={description ?? title}>
+  <article class="post" id="post-content">
+    <div class="container">
+      <div class="post__header">
+        <div class="post__meta">
+          {category && <span class="tag tag--purple">{category}</span>}
+          {type === 'blog' && tags.length > 0 && tags.map((t) => <span class="tag">{t}</span>)}
+          <span class="text-mono post__date">{formattedDate}</span>
+        </div>
+        <h1 class="post__title">{title}</h1>
+        {description && <p class="post__desc">{description}</p>}
+        {author && (
+          <div class="post__author text-mono">
+            <span class="accent">@</span>{author}
+          </div>
+        )}
+      </div>
+      <div class="post__body prose">
+        <slot />
+      </div>
+      <div class="post__footer">
+        <a href={type === 'blog' ? '/blog' : '/reports'} class="btn btn--ghost text-mono">
+          ← Back to {type === 'blog' ? 'Blog' : 'Reports'}
+        </a>
+      </div>
+    </div>
+  </article>
+</BaseLayout>
+
+<style>
+  .post {
+    padding-top: calc(var(--header-height) + var(--space-12));
+    padding-bottom: var(--space-16);
+  }
+  .post__header {
+    margin-bottom: var(--space-12);
+    max-width: 72ch;
+  }
+  .post__meta {
+    display: flex; align-items: center; gap: var(--space-3);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-4);
+  }
+  .post__date {
+    font-size: var(--text-sm);
+    color: var(--text-tertiary);
+  }
+  .post__title {
+    font-size: var(--text-4xl);
+    font-weight: 800;
+    line-height: 1.15;
+    margin-bottom: var(--space-4);
+  }
+  .post__desc {
+    font-size: var(--text-lg);
+    color: var(--text-secondary);
+    margin-bottom: var(--space-4);
+  }
+  .post__author {
+    font-size: var(--text-sm);
+    color: var(--text-tertiary);
+  }
+  .post__author .accent { color: var(--accent-cyan); }
+  .post__body {
+    padding-bottom: var(--space-12);
+    border-bottom: var(--border-subtle);
+  }
+  .post__footer {
+    padding-top: var(--space-8);
+  }
+</style>

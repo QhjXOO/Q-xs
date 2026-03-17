@@ -1,0 +1,53 @@
+---
+/**
+ * GlowEffect.astro
+ * Full-viewport mouse-tracking glow overlay
+ * Inspired by antigravity.google
+ */
+---
+
+<div class="glow-overlay" id="glow-overlay"></div>
+
+<style>
+  .glow-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+    background: radial-gradient(
+      600px circle at var(--mouse-x) var(--mouse-y),
+      rgba(0, 255, 136, 0.07),
+      rgba(0, 212, 255, 0.03) 40%,
+      transparent 80%
+    );
+    opacity: 0;
+    transition: opacity 0.4s ease;
+  }
+
+  .glow-overlay.active {
+    opacity: 1;
+  }
+</style>
+
+<script>
+  const overlay = document.getElementById('glow-overlay');
+  let ticking = false;
+
+  document.addEventListener('mousemove', (e) => {
+    if (!ticking) {
+      requestAnimationFrame(() => {
+        const x = e.clientX;
+        const y = e.clientY;
+        document.documentElement.style.setProperty('--mouse-x', x + 'px');
+        document.documentElement.style.setProperty('--mouse-y', y + 'px');
+        overlay?.classList.add('active');
+        ticking = false;
+      });
+      ticking = true;
+    }
+  });
+
+  document.addEventListener('mouseleave', () => {
+    overlay?.classList.remove('active');
+  });
+</script>

@@ -1,0 +1,68 @@
+---
+/**
+ * blog/index.astro — Blog listing page
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import BlogCard from '../../components/BlogCard.astro';
+import { getCollection } from 'astro:content';
+
+const posts = (await getCollection('blog', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+
+export const prerender = true;
+---
+
+<BaseLayout title="Blog — Q:XS" description="Technical deep-dives, system updates, and Web3 alpha.">
+  <section class="page-section" id="blog-list">
+    <div class="container">
+      <div class="page-header">
+        <div class="terminal-prefix text-mono">
+          <span class="accent">$</span> ls -la /blog/
+        </div>
+        <h1 class="page-title">Blog</h1>
+        <p class="page-desc">Technical deep-dives, system updates, and alpha leaks</p>
+      </div>
+      <div class="posts-grid">
+        {posts.map((post) => (
+          <BlogCard
+            title={post.data.title}
+            slug={post.id}
+            date={post.data.date}
+            description={post.data.description}
+            tags={post.data.tags}
+          />
+        ))}
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .page-section {
+    padding-top: calc(var(--header-height) + var(--space-12));
+    padding-bottom: var(--space-16);
+  }
+  .page-header {
+    margin-bottom: var(--space-12);
+  }
+  .terminal-prefix {
+    font-size: var(--text-sm);
+    color: var(--text-tertiary);
+    margin-bottom: var(--space-3);
+  }
+  .terminal-prefix .accent { color: var(--accent-green); }
+  .page-title {
+    font-size: var(--text-4xl);
+    font-weight: 800;
+    margin-bottom: var(--space-3);
+  }
+  .page-desc {
+    font-size: var(--text-lg);
+    color: var(--text-secondary);
+  }
+  .posts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: var(--space-6);
+  }
+</style>

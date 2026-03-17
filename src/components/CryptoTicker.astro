@@ -1,0 +1,316 @@
+---
+/**
+ * CryptoTicker.astro — Real-time crypto price dashboard
+ * Uses CoinGecko REST API + CoinCap WebSocket for live updates
+ * Client-side island for reactivity
+ */
+---
+
+<section class="crypto-section section" id="crypto-dashboard">
+  <div class="container">
+    <div class="section-header">
+      <h2 class="section-title">
+        <span class="accent">◈</span> Live Dashboard
+      </h2>
+      <p class="section-subtitle">Real-time market data · Powered by CoinGecko & CoinCap</p>
+    </div>
+    <div class="ticker-status" id="ticker-status">
+      <span class="status-indicator" id="ws-indicator"></span>
+      <span class="text-mono" id="ws-status-text">Connecting...</span>
+    </div>
+    <div class="crypto-grid" id="crypto-grid">
+      <!-- Cards injected by JS -->
+      <div class="crypto-loading" id="crypto-loading">
+        <div class="loader"></div>
+        <span class="text-mono">Fetching market data...</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .crypto-section {
+    position: relative;
+  }
+
+  .ticker-status {
+    display: flex; align-items: center; gap: var(--space-2);
+    margin-bottom: var(--space-6);
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+  }
+  .status-indicator {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent-orange);
+    transition: background var(--transition-base);
+  }
+  .status-indicator.connected { background: var(--accent-green); }
+  .status-indicator.error     { background: var(--color-down); }
+
+  .crypto-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: var(--space-4);
+  }
+
+  .crypto-loading {
+    grid-column: 1 / -1;
+    display: flex; flex-direction: column; align-items: center; gap: var(--space-4);
+    padding: var(--space-16) 0;
+    color: var(--text-tertiary);
+  }
+
+  .loader {
+    width: 32px; height: 32px;
+    border: 2px solid var(--bg-tertiary);
+    border-top: 2px solid var(--accent-green);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Crypto Card Styles */
+  .crypto-grid :global(.crypto-card) {
+    background: var(--bg-card);
+    border: var(--border-card);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+    transition: all var(--transition-base);
+    position: relative;
+    overflow: hidden;
+  }
+  .crypto-grid :global(.crypto-card:hover) {
+    background: var(--bg-card-hover);
+    border-color: rgba(0,255,136,0.15);
+    box-shadow: var(--shadow-glow);
+    transform: translateY(-2px);
+  }
+  .crypto-grid :global(.crypto-card__header) {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: var(--space-4);
+  }
+  .crypto-grid :global(.crypto-card__symbol) {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: var(--text-lg);
+    color: var(--text-primary);
+  }
+  .crypto-grid :global(.crypto-card__icon) {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: var(--text-lg);
+  }
+  .crypto-grid :global(.crypto-card__price) {
+    font-family: var(--font-mono);
+    font-size: var(--text-2xl);
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--space-2);
+  }
+  .crypto-grid :global(.crypto-card__change) {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+  .crypto-grid :global(.crypto-card__change.up) { color: var(--color-up); }
+  .crypto-grid :global(.crypto-card__change.down) { color: var(--color-down); }
+  .crypto-grid :global(.crypto-card__meta) {
+    margin-top: var(--space-4);
+    padding-top: var(--space-3);
+    border-top: var(--border-subtle);
+    display: flex; justify-content: space-between;
+  }
+  .crypto-grid :global(.crypto-card__meta-item) {
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .crypto-grid :global(.crypto-card__meta-label) {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .crypto-grid :global(.crypto-card__meta-value) {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+  .crypto-grid :global(.flash) {
+    animation: flash-green 0.5s ease-out;
+  }
+  @keyframes flash-green {
+    0%   { box-shadow: inset 0 0 0 1px rgba(0,255,136,0.4); }
+    100% { box-shadow: inset 0 0 0 1px transparent; }
+  }
+</style>
+
+<script>
+  const COINS = [
+    { id: 'bitcoin',  symbol: 'BTC',  icon: '₿', color: '#f7931a' },
+    { id: 'ethereum', symbol: 'ETH',  icon: 'Ξ', color: '#627eea' },
+    { id: 'solana',   symbol: 'SOL',  icon: '◎', color: '#9945ff' },
+    { id: 'monero',   symbol: 'XMR',  icon: 'ɱ', color: '#ff6600' },
+    { id: 'dogecoin', symbol: 'DOGE', icon: 'Ð', color: '#c2a633' },
+  ];
+
+  const grid = document.getElementById('crypto-grid');
+  const loading = document.getElementById('crypto-loading');
+  const wsIndicator = document.getElementById('ws-indicator');
+  const wsStatusText = document.getElementById('ws-status-text');
+
+  interface CoinData {
+    usd: number;
+    usd_24h_change?: number;
+    usd_market_cap?: number;
+    usd_24h_vol?: number;
+  }
+
+  function formatPrice(price: number): string {
+    if (price >= 1) return '$' + price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return '$' + price.toFixed(6);
+  }
+
+  function formatChange(change: number | undefined): { text: string; cls: string } {
+    if (change === undefined) return { text: '—', cls: '' };
+    const sign = change >= 0 ? '+' : '';
+    return { text: `${sign}${change.toFixed(2)}%`, cls: change >= 0 ? 'up' : 'down' };
+  }
+
+  function formatLargeNumber(n: number | undefined): string {
+    if (!n) return '—';
+    if (n >= 1e12) return '$' + (n / 1e12).toFixed(2) + 'T';
+    if (n >= 1e9)  return '$' + (n / 1e9).toFixed(2) + 'B';
+    if (n >= 1e6)  return '$' + (n / 1e6).toFixed(2) + 'M';
+    return '$' + n.toLocaleString();
+  }
+
+  function renderCards(data: Record<string, CoinData>) {
+    if (loading) loading.style.display = 'none';
+
+    COINS.forEach((coin) => {
+      const coinData = data[coin.id];
+      if (!coinData) return;
+
+      const existing = document.getElementById(`card-${coin.id}`);
+      const change = formatChange(coinData.usd_24h_change);
+
+      const html = `
+        <div class="crypto-card__header">
+          <span class="crypto-card__symbol">${coin.symbol}</span>
+          <span class="crypto-card__icon" style="background:${coin.color}20; color:${coin.color}">${coin.icon}</span>
+        </div>
+        <div class="crypto-card__price">${formatPrice(coinData.usd)}</div>
+        <div class="crypto-card__change ${change.cls}">24h: ${change.text}</div>
+        <div class="crypto-card__meta">
+          <div class="crypto-card__meta-item">
+            <span class="crypto-card__meta-label">Mkt Cap</span>
+            <span class="crypto-card__meta-value">${formatLargeNumber(coinData.usd_market_cap)}</span>
+          </div>
+          <div class="crypto-card__meta-item">
+            <span class="crypto-card__meta-label">24h Vol</span>
+            <span class="crypto-card__meta-value">${formatLargeNumber(coinData.usd_24h_vol)}</span>
+          </div>
+        </div>
+      `;
+
+      if (existing) {
+        existing.innerHTML = html;
+        existing.classList.remove('flash');
+        void existing.offsetWidth; // force reflow
+        existing.classList.add('flash');
+      } else {
+        const card = document.createElement('div');
+        card.className = 'crypto-card animate-in';
+        card.id = `card-${coin.id}`;
+        card.innerHTML = html;
+        grid?.appendChild(card);
+      }
+    });
+  }
+
+  // ── CoinGecko REST Fetch ──
+  async function fetchPrices() {
+    try {
+      const ids = COINS.map(c => c.id).join(',');
+      const res = await fetch(
+        `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true&include_market_cap=true&include_24hr_vol=true`
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      renderCards(data);
+      return data;
+    } catch (err) {
+      console.error('[CryptoTicker] REST fetch failed:', err);
+      if (wsStatusText) wsStatusText.textContent = 'REST fallback active';
+      return null;
+    }
+  }
+
+  // ── CoinCap WebSocket ──
+  function connectWebSocket(initialData: Record<string, CoinData> | null) {
+    const coinCapIds = COINS.map(c => c.id).join(',');
+    let ws: WebSocket;
+
+    try {
+      ws = new WebSocket(`wss://ws.coincap.io/prices?assets=${coinCapIds}`);
+    } catch {
+      if (wsIndicator) wsIndicator.classList.add('error');
+      if (wsStatusText) wsStatusText.textContent = 'WebSocket unavailable — polling';
+      startPolling();
+      return;
+    }
+
+    ws.onopen = () => {
+      if (wsIndicator) { wsIndicator.classList.remove('error'); wsIndicator.classList.add('connected'); }
+      if (wsStatusText) wsStatusText.textContent = 'WebSocket connected';
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const prices: Record<string, string> = JSON.parse(event.data);
+        // Merge WS data with existing data structure
+        Object.entries(prices).forEach(([coinId, price]) => {
+          if (initialData && initialData[coinId]) {
+            initialData[coinId].usd = parseFloat(price);
+            renderCards(initialData);
+          } else {
+            // WS-only update, create minimal data
+            const card = document.getElementById(`card-${coinId}`);
+            if (card) {
+              const priceEl = card.querySelector('.crypto-card__price');
+              if (priceEl) priceEl.textContent = formatPrice(parseFloat(price));
+              card.classList.remove('flash');
+              void card.offsetWidth;
+              card.classList.add('flash');
+            }
+          }
+        });
+      } catch (e) { console.error('[WS] Parse error', e); }
+    };
+
+    ws.onerror = () => {
+      if (wsIndicator) { wsIndicator.classList.remove('connected'); wsIndicator.classList.add('error'); }
+      if (wsStatusText) wsStatusText.textContent = 'WebSocket error';
+    };
+
+    ws.onclose = () => {
+      if (wsIndicator) wsIndicator.classList.remove('connected');
+      if (wsStatusText) wsStatusText.textContent = 'Reconnecting...';
+      setTimeout(() => connectWebSocket(initialData), 5000);
+    };
+  }
+
+  // ── Polling Fallback ──
+  function startPolling() {
+    setInterval(fetchPrices, 30000);
+  }
+
+  // ── Init ──
+  (async () => {
+    const data = await fetchPrices();
+    connectWebSocket(data);
+    // Also poll REST every 60s to keep market cap / volume updated
+    setInterval(fetchPrices, 60000);
+  })();
+</script>

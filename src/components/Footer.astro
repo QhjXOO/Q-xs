@@ -1,0 +1,46 @@
+---
+/**
+ * Footer.astro — Minimal geek footer
+ */
+const year = new Date().getFullYear();
+---
+
+<footer class="footer">
+  <div class="footer__inner container">
+    <div class="footer__left">
+      <span class="text-mono footer__sig">
+        <span class="accent">$</span> echo "Built with Astro & deployed on Cloudflare Edge"
+      </span>
+    </div>
+    <div class="footer__right">
+      <span class="text-mono footer__copy">© {year} Q:XS — All systems operational</span>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .footer {
+    border-top: var(--border-subtle);
+    background: rgba(10,10,15,0.6);
+    padding: var(--space-8) 0;
+  }
+  .footer__inner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+  }
+  .footer__sig {
+    font-size: var(--text-sm);
+    color: var(--text-tertiary);
+  }
+  .footer__sig .accent { color: var(--accent-green); }
+  .footer__copy {
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+  }
+  @media (max-width: 768px) {
+    .footer__inner { flex-direction: column; text-align: center; }
+  }
+</style>
